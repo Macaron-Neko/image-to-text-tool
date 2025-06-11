@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>画像から文字抽出ツール</title>
+</head>
+<body>
+  <h1>画像文字抽出ツール（体験版）</h1>
+  <input type="file" id="imageInput" accept="image/*"><br><br>
+  <img id="preview" style="max-width:300px;"><br>
+  <p>（まだOCR機能はついてません）</p>
+  <script>
+    const input = document.getElementById('imageInput');
+    const preview = document.getElementById('preview');
+    input.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if(file) preview.src = URL.createObjectURL(file);
+    });
+  </script>
+</body>
+</html>
