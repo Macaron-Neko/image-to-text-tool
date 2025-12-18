@@ -1,131 +1,74 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>画像→文字抽出ツール（体験版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f7f7f7;
       padding: 20px;
-      max-width: 700px;
+      max-width: 800px;
       margin: auto;
     }
+
     h1 {
       text-align: center;
     }
+
     .box {
       background: #fff;
       padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin-top: 10px;
-      cursor: pointer;
+
+    input[type="file"] {
+      margin-bottom: 10px;
     }
-    textarea {
-      width: 100%;
-      height: 200px;
-      margin-top: 10px;
-    }
-    img {
+
+    canvas {
+      display: block;
       max-width: 100%;
+      border: 1px solid #ccc;
       margin-top: 10px;
-    }
-    .count {
-      margin-top: 10px;
-      color: #666;
     }
   </style>
 </head>
+
 <body>
+  <h1>画像→文字抽出ツール（体験版）</h1>
 
-<h1>画像→文字抽出ツール（体験版）</h1>
+  <div class="box">
+    <input type="file" id="imageInput" accept="image/*" />
 
-<div class="box">
-  <input type="file" id="imageInput" accept="image/*"><br>
-  <img id="preview">
-  <br>
-  <button id="ocrBtn">文字を抽出する</button>
+    <canvas id="canvas"></canvas>
+  </div>
 
-  <div class="count" id="countInfo"></div>
+  <script>
+    const input = document.getElementById("imageInput");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-  <textarea id="result" placeholder="ここに抽出結果が表示されます"></textarea>
-</div>
+    input.addEventListener("change", () => {
+      const file = input.files[0];
+      if (!file) return;
 
-<script>
-const API_URL = "https://ocr-proxy-773716506088.asia-northeast1.run.app/ocr";
-const LIMIT = 5;
+      const img = new Image();
+      img.onload = () => {
+        // 画像サイズに canvas を合わせる
+        canvas.width = img.width;
+        canvas.height = img.height;
 
-const input = document.getElementById("imageInput");
-const preview = document.getElementById("preview");
-const btn = document.getElementById("ocrBtn");
-const result = document.getElementById("result");
-const countInfo = document.getElementById("countInfo");
+        // 描画
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      };
 
-function getCount() {
-  return Number(localStorage.getItem("ocrCount") || 0);
-}
-
-function updateCount() {
-  const c = getCount();
-  countInfo.textContent = `残り使用回数：${Math.max(0, LIMIT - c)} / ${LIMIT}`;
-  if (c >= LIMIT) {
-    btn.disabled = true;
-    btn.textContent = "無料回数終了";
-  }
-}
-
-updateCount();
-
-input.addEventListener("change", e => {
-  const file = e.target.files[0];
-  if (file) {
-    preview.src = URL.createObjectURL(file);
-  }
-});
-
-btn.addEventListener("click", async () => {
-  const count = getCount();
-  if (count >= LIMIT) return;
-
-  const file = input.files[0];
-  if (!file) {
-    alert("画像を選んでください");
-    return;
-  }
-
-  result.value = "処理中…";
-
-  const base64 = await toBase64(file);
-
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: base64 })
+      img.src = URL.createObjectURL(file);
     });
-    const data = await res.json();
-    result.value = data.text || "(文字が検出されませんでした)";
-    localStorage.setItem("ocrCount", count + 1);
-    updateCount();
-  } catch (e) {
-    result.value = "エラーが発生しました";
-  }
-});
-
-function toBase64(file) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(",")[1]);
-    reader.readAsDataURL(file);
-  });
-}
-</script>
-
+  </script>
 </body>
 </html>
