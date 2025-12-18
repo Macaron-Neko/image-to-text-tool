@@ -34,6 +34,7 @@
       max-width: 100%;
       border: 1px solid #ccc;
       margin-top: 10px;
+      cursor: crosshair;
     }
   </style>
 </head>
@@ -43,7 +44,6 @@
 
   <div class="box">
     <input type="file" id="imageInput" accept="image/*" />
-
     <canvas id="canvas"></canvas>
   </div>
 
@@ -52,22 +52,72 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    let img = null;
+
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let currentY = 0;
+
+    // 画像読み込み
     input.addEventListener("change", () => {
       const file = input.files[0];
       if (!file) return;
 
-      const img = new Image();
+      img = new Image();
       img.onload = () => {
-        // 画像サイズに canvas を合わせる
         canvas.width = img.width;
         canvas.height = img.height;
-
-        // 描画
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
+        redraw();
       };
-
       img.src = URL.createObjectURL(file);
+    });
+
+    // 再描画（画像＋四角）
+    function redraw() {
+      if (!img) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      if (isDragging) {
+        const x = Math.min(startX, currentX);
+        const y = Math.min(startY, currentY);
+        const w = Math.abs(startX - currentX);
+        const h = Math.abs(startY - currentY);
+
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+      }
+    }
+
+    // マウス押下
+    canvas.addEventListener("mousedown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
+      isDragging = true;
+    });
+
+    // マウス移動
+    canvas.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      const rect = canvas.getBoundingClientRect();
+      currentX = e.clientX - rect.left;
+      currentY = e.clientY - rect.top;
+      redraw();
+    });
+
+    // マウス離す
+    canvas.addEventListener("mouseup", () => {
+      isDragging = false;
+      redraw();
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      isDragging = false;
+      redraw();
     });
   </script>
 </body>
