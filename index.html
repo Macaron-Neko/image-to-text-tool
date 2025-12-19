@@ -13,6 +13,10 @@ body {
   max-width: 900px;
   margin: auto;
 }
+h2 {
+  font-size: 1.8em;          /* ② タイトル少し大きく */
+  text-align: center;       /* ② 中央寄せ */
+}
 .box {
   background: #fff;
   padding: 20px;
@@ -23,6 +27,7 @@ canvas {
   cursor: crosshair;
   max-width: 100%;
   touch-action: none;
+  display: none;            /* ⑤ 最初は表示しない */
 }
 textarea {
   width: 100%;
@@ -30,8 +35,12 @@ textarea {
   margin-top: 10px;
 }
 button {
-  padding: 10px 20px;
+  padding: 12px 24px;       /* ③ ボタン文字を大きく */
   margin-top: 10px;
+  font-size: 1.1em;
+}
+#ocrBtn {
+  font-weight: bold;        /* ③ 抽出ボタンのみ太字 */
 }
 .buttons {
   display: flex;
@@ -51,7 +60,7 @@ button {
   <p>
     ・ドラッグなし → 全体OCR<br>
     ・ドラッグあり → 選択範囲OCR<br>
-    ・右クリック / ダブルタップ → 赤枠消去
+    ・右クリック / 2本指タッチ → 赤枠消去
   </p>
 
   <div class="buttons">
@@ -63,7 +72,6 @@ button {
 </div>
 
 <script>
-/* ★ Cloud Run URL ★ */
 const OCR_ENDPOINT = "https://ocr-proxy-773716506088.asia-northeast1.run.app/ocr";
 
 const canvas = document.getElementById("canvas");
@@ -82,7 +90,6 @@ let startX, startY, endX, endY;
 let dragging = false;
 let selection = null;
 
-/* ===== 共通描画 ===== */
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!imgLoaded) return;
@@ -94,7 +101,6 @@ function redraw() {
   }
 }
 
-/* ===== 画像読み込み ===== */
 input.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -109,6 +115,7 @@ input.addEventListener("change", e => {
       );
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
+      canvas.style.display = "block";   /* ⑤ 読み込み後に表示 */
       imgLoaded = true;
       selection = null;
       redraw();
@@ -118,17 +125,17 @@ input.addEventListener("change", e => {
   reader.readAsDataURL(file);
 });
 
-/* ===== 座標取得 ===== */
 function getPos(e) {
   const r = canvas.getBoundingClientRect();
   const p = e.touches ? e.touches[0] : e;
   return { x: p.clientX - r.left, y: p.clientY - r.top };
 }
 
-/* ===== ドラッグ処理 ===== */
 function startDrag(e) {
   if (!imgLoaded) return;
   e.preventDefault();
+  selection = null;          /* ① 新しい枠開始時に前の枠を消す */
+  redraw();
   const p = getPos(e);
   startX = p.x;
   startY = p.y;
@@ -162,7 +169,6 @@ function endDrag(e) {
   redraw();
 }
 
-/* ===== 赤枠消去 ===== */
 function clearSelection() {
   selection = null;
   redraw();
@@ -174,17 +180,14 @@ canvas.addEventListener("contextmenu", e => {
   clearSelection();
 });
 
-/* スマホダブルタップ */
-let lastTap = 0;
-canvas.addEventListener("touchend", e => {
-  const now = Date.now();
-  if (now - lastTap < 300) {
+/* スマホ2本指タッチ */
+canvas.addEventListener("touchstart", e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
     clearSelection();
   }
-  lastTap = now;
-});
+}, { passive:false });
 
-/* イベント登録 */
 canvas.addEventListener("mousedown", startDrag);
 canvas.addEventListener("mousemove", moveDrag);
 canvas.addEventListener("mouseup", endDrag);
@@ -193,7 +196,7 @@ canvas.addEventListener("touchstart", startDrag, { passive:false });
 canvas.addEventListener("touchmove", moveDrag, { passive:false });
 canvas.addEventListener("touchend", endDrag, { passive:false });
 
-/* ===== OCR ===== */
+/* OCR */
 document.getElementById("ocrBtn").onclick = async () => {
   if (!imgLoaded) return alert("画像を選択してください");
 
@@ -212,7 +215,6 @@ document.getElementById("ocrBtn").onclick = async () => {
   off.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
   const base64 = off.toDataURL("image/png").split(",")[1];
-
   result.value = "OCR中…";
 
   const res = await fetch(OCR_ENDPOINT, {
@@ -225,13 +227,13 @@ document.getElementById("ocrBtn").onclick = async () => {
   result.value = data.text || "";
 };
 
-/* ===== リセット ===== */
+/* リセット（⑥ 抽出結果は消さない） */
 document.getElementById("resetBtn").onclick = () => {
   imgLoaded = false;
   img.src = "";
   canvas.width = canvas.height = 0;
+  canvas.style.display = "none";
   selection = null;
-  result.value = "";
   input.value = "";
 };
 </script>
