@@ -2,122 +2,157 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>画像→文字抽出ツール（体験版）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+  <title>画像→文字抽出ツール（体験版）</title>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f7f7f7;
-      padding: 20px;
-      max-width: 800px;
-      margin: auto;
+      background: #f5f5f5;
+      padding: 30px;
     }
-
     h1 {
       text-align: center;
     }
-
     .box {
       background: #fff;
+      max-width: 800px;
+      margin: auto;
       padding: 20px;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
-
-    input[type="file"] {
-      margin-bottom: 10px;
-    }
-
     canvas {
-      display: block;
       max-width: 100%;
       border: 1px solid #ccc;
-      margin-top: 10px;
       cursor: crosshair;
+      margin-top: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 15px;
+      cursor: pointer;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin-top: 15px;
+    }
+    .note {
+      font-size: 13px;
+      color: #666;
+      margin-top: 8px;
     }
   </style>
 </head>
-
 <body>
   <h1>画像→文字抽出ツール（体験版）</h1>
 
   <div class="box">
     <input type="file" id="imageInput" accept="image/*" />
     <canvas id="canvas"></canvas>
+
+    <div class="note">
+      ・ドラッグしない場合：画像全体をOCR<br>
+      ・ドラッグした場合：選択範囲のみOCR
+    </div>
+
+    <button id="ocrBtn">文字を抽出する</button>
+
+    <textarea id="result" placeholder="ここに抽出結果が表示されます"></textarea>
   </div>
 
   <script>
-    const input = document.getElementById("imageInput");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+    const imageInput = document.getElementById("imageInput");
+    const result = document.getElementById("result");
 
-    let img = null;
+    let img = new Image();
+    let startX, startY, endX, endY;
+    let dragging = false;
 
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let currentX = 0;
-    let currentY = 0;
-
-    // 画像読み込み
-    input.addEventListener("change", () => {
-      const file = input.files[0];
+    imageInput.addEventListener("change", e => {
+      const file = e.target.files[0];
       if (!file) return;
 
-      img = new Image();
+      img.src = URL.createObjectURL(file);
       img.onload = () => {
         canvas.width = img.width;
         canvas.height = img.height;
-        redraw();
+        ctx.drawImage(img, 0, 0);
+        startX = startY = endX = endY = undefined;
       };
-      img.src = URL.createObjectURL(file);
     });
 
-    // 再描画（画像＋四角）
-    function redraw() {
-      if (!img) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.addEventListener("mousedown", e => {
+      startX = e.offsetX;
+      startY = e.offsetY;
+      dragging = true;
+    });
+
+    canvas.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      endX = e.offsetX;
+      endY = e.offsetY;
+
       ctx.drawImage(img, 0, 0);
-
-      if (isDragging) {
-        const x = Math.min(startX, currentX);
-        const y = Math.min(startY, currentY);
-        const w = Math.abs(startX - currentX);
-        const h = Math.abs(startY - currentY);
-
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, w, h);
-      }
-    }
-
-    // マウス押下
-    canvas.addEventListener("mousedown", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      startX = e.clientX - rect.left;
-      startY = e.clientY - rect.top;
-      isDragging = true;
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(startX, startY, endX - startX, endY - startY);
     });
 
-    // マウス移動
-    canvas.addEventListener("mousemove", (e) => {
-      if (!isDragging) return;
-      const rect = canvas.getBoundingClientRect();
-      currentX = e.clientX - rect.left;
-      currentY = e.clientY - rect.top;
-      redraw();
-    });
-
-    // マウス離す
     canvas.addEventListener("mouseup", () => {
-      isDragging = false;
-      redraw();
+      dragging = false;
     });
 
-    canvas.addEventListener("mouseleave", () => {
-      isDragging = false;
-      redraw();
+    document.getElementById("ocrBtn").addEventListener("click", () => {
+      if (!img.src) {
+        alert("画像を選択してください");
+        return;
+      }
+
+      let targetCanvas = canvas;
+
+      if (startX !== undefined && endX !== undefined) {
+        const w = Math.abs(endX - startX);
+        const h = Math.abs(endY - startY);
+
+        if (w > 5 && h > 5) {
+          const crop = document.createElement("canvas");
+          crop.width = w;
+          crop.height = h;
+          crop.getContext("2d").drawImage(
+            canvas,
+            Math.min(startX, endX),
+            Math.min(startY, endY),
+            w,
+            h,
+            0,
+            0,
+            w,
+            h
+          );
+          targetCanvas = crop;
+        }
+      }
+
+      const base64 = targetCanvas.toDataURL("image/png").split(",")[1];
+      result.value = "OCR中…";
+
+      fetch("https://ocr-proxy-773716506088.asia-northeast1.run.app/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 })
+      })
+      .then(r => r.json())
+      .then(d => {
+        result.value = d.text || "（文字が検出されませんでした）";
+      })
+      .catch(err => {
+        result.value = "エラーが発生しました";
+        console.error(err);
+      });
     });
   </script>
 </body>
