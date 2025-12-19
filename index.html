@@ -21,6 +21,7 @@ canvas {
   border: 1px solid #ccc;
   cursor: crosshair;
   max-width: 100%;
+  touch-action: none;
 }
 textarea {
   width: 100%;
@@ -42,8 +43,8 @@ button {
   <canvas id="canvas"></canvas>
 
   <p>
-    ・ドラッグしない → 画像全体OCR<br>
-    ・ドラッグする → 選択範囲OCR
+    ・ドラッグなし → 全体OCR<br>
+    ・ドラッグあり → 選択範囲OCR
   </p>
 
   <button id="ocrBtn">文字を抽出する</button>
@@ -51,6 +52,9 @@ button {
 </div>
 
 <script>
+/* ★★★ 自分の Cloud Run URL に変更 ★★★ */
+const OCR_ENDPOINT = "https://ocr-proxy-xxxxxxxxxx.asia-northeast1.run.app/ocr";
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const input = document.getElementById("fileInput");
@@ -67,6 +71,7 @@ let startX, startY, endX, endY;
 let dragging = false;
 let selection = null;
 
+/* 画像読み込み */
 input.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -79,10 +84,8 @@ input.addEventListener("change", e => {
         MAX_H / img.naturalHeight,
         1
       );
-
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
-
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       imgLoaded = true;
       selection = null;
@@ -92,30 +95,42 @@ input.addEventListener("change", e => {
   reader.readAsDataURL(file);
 });
 
-canvas.addEventListener("mousedown", e => {
-  if (!imgLoaded) return;
+/* 座標取得（PC＋スマホ共通） */
+function getPos(e) {
   const r = canvas.getBoundingClientRect();
-  startX = e.clientX - r.left;
-  startY = e.clientY - r.top;
-  dragging = true;
-});
+  const p = e.touches ? e.touches[0] : e;
+  return {
+    x: p.clientX - r.left,
+    y: p.clientY - r.top
+  };
+}
 
-canvas.addEventListener("mousemove", e => {
+function startDrag(e) {
+  if (!imgLoaded) return;
+  e.preventDefault();
+  const p = getPos(e);
+  startX = p.x;
+  startY = p.y;
+  dragging = true;
+}
+
+function moveDrag(e) {
   if (!dragging) return;
-  const r = canvas.getBoundingClientRect();
-  endX = e.clientX - r.left;
-  endY = e.clientY - r.top;
+  e.preventDefault();
+  const p = getPos(e);
+  endX = p.x;
+  endY = p.y;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
   ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-});
+}
 
-canvas.addEventListener("mouseup", () => {
+function endDrag(e) {
   if (!dragging) return;
+  e.preventDefault();
   dragging = false;
 
   selection = {
@@ -124,8 +139,18 @@ canvas.addEventListener("mouseup", () => {
     w: Math.abs(endX - startX),
     h: Math.abs(endY - startY)
   };
-});
+}
 
+/* イベント登録 */
+canvas.addEventListener("mousedown", startDrag);
+canvas.addEventListener("mousemove", moveDrag);
+canvas.addEventListener("mouseup", endDrag);
+
+canvas.addEventListener("touchstart", startDrag, { passive:false });
+canvas.addEventListener("touchmove", moveDrag, { passive:false });
+canvas.addEventListener("touchend", endDrag);
+
+/* OCR実行 */
 document.getElementById("ocrBtn").onclick = async () => {
   if (!imgLoaded) return alert("画像を選択してください");
 
@@ -145,9 +170,11 @@ document.getElementById("ocrBtn").onclick = async () => {
 
   const base64 = off.toDataURL("image/png").split(",")[1];
 
-  const res = await fetch("YOUR_CLOUD_RUN_URL/ocr", {
+  result.value = "OCR中…";
+
+  const res = await fetch(OCR_ENDPOINT, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: base64 })
   });
 
