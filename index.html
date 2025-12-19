@@ -1,54 +1,51 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>画像→文字抽出ツール（体験）</title>
+<meta charset="UTF-8">
+<title>画像→文字抽出ツール（体験版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f7f7f7;
-    padding: 20px;
-    max-width: 900px;
-    margin: auto;
-  }
-  h1 { text-align: center; }
-  .box {
-    background: #fff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  }
-  button {
-    padding: 10px 20px;
-    font-size: 16px;
-    margin-top: 10px;
-    cursor: pointer;
-  }
-  textarea {
-    width: 100%;
-    height: 200px;
-    margin-top: 10px;
-  }
-  #canvasWrapper {
-    position: relative;
-    display: inline-block;
-    margin-top: 10px;
-  }
-  canvas {
-    border: 1px solid #ccc;
-    cursor: crosshair;
-  }
+body {
+  font-family: system-ui, sans-serif;
+  background: #f7f7f7;
+  padding: 20px;
+  max-width: 900px;
+  margin: auto;
+}
+.box {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+}
+canvas {
+  border: 1px solid #ccc;
+  cursor: crosshair;
+  max-width: 100%;
+}
+textarea {
+  width: 100%;
+  height: 200px;
+  margin-top: 10px;
+}
+button {
+  padding: 10px 20px;
+  margin-top: 10px;
+}
 </style>
 </head>
+
 <body>
-<h1>画像→文字抽出ツール（体験）</h1>
+<h2>画像→文字抽出ツール（体験版）</h2>
+
 <div class="box">
-  <input type="file" id="imageInput" accept="image/*" /><br /><br />
-  <div id="canvasWrapper">
-    <canvas id="canvas"></canvas>
-  </div>
-  <p>・ドラッグなし → 画像全体をOCR<br>・ドラッグあり → 選択範囲のみOCR</p>
+  <input type="file" id="fileInput" accept="image/*"><br><br>
+  <canvas id="canvas"></canvas>
+
+  <p>
+    ・ドラッグしない → 画像全体OCR<br>
+    ・ドラッグする → 選択範囲OCR
+  </p>
+
   <button id="ocrBtn">文字を抽出する</button>
   <textarea id="result" placeholder="ここに抽出結果が表示されます"></textarea>
 </div>
@@ -56,18 +53,19 @@
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const input = document.getElementById("imageInput");
+const input = document.getElementById("fileInput");
 const result = document.getElementById("result");
+
+const MAX_W = 800;
+const MAX_H = 500;
 
 let img = new Image();
 let imgLoaded = false;
-let startX = 0, startY = 0, endX = 0, endY = 0;
-let dragging = false;
+let scale = 1;
 
-function clearAndDraw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-}
+let startX, startY, endX, endY;
+let dragging = false;
+let selection = null;
 
 input.addEventListener("change", e => {
   const file = e.target.files[0];
@@ -76,11 +74,18 @@ input.addEventListener("change", e => {
   const reader = new FileReader();
   reader.onload = () => {
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
+      scale = Math.min(
+        MAX_W / img.naturalWidth,
+        MAX_H / img.naturalHeight,
+        1
+      );
+
+      canvas.width = img.naturalWidth * scale;
+      canvas.height = img.naturalHeight * scale;
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       imgLoaded = true;
-      startX = startY = endX = endY = 0;
-      clearAndDraw();
+      selection = null;
     };
     img.src = reader.result;
   };
@@ -89,66 +94,66 @@ input.addEventListener("change", e => {
 
 canvas.addEventListener("mousedown", e => {
   if (!imgLoaded) return;
-  const rect = canvas.getBoundingClientRect();
-  startX = e.clientX - rect.left;
-  startY = e.clientY - rect.top;
-  endX = startX;
-  endY = startY;
+  const r = canvas.getBoundingClientRect();
+  startX = e.clientX - r.left;
+  startY = e.clientY - r.top;
   dragging = true;
 });
 
 canvas.addEventListener("mousemove", e => {
-  if (!dragging || !imgLoaded) return;
-  const rect = canvas.getBoundingClientRect();
-  endX = e.clientX - rect.left;
-  endY = e.clientY - rect.top;
-  clearAndDraw();
+  if (!dragging) return;
+  const r = canvas.getBoundingClientRect();
+  endX = e.clientX - r.left;
+  endY = e.clientY - r.top;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
   ctx.strokeRect(startX, startY, endX - startX, endY - startY);
 });
 
 canvas.addEventListener("mouseup", () => {
+  if (!dragging) return;
   dragging = false;
+
+  selection = {
+    x: Math.min(startX, endX),
+    y: Math.min(startY, endY),
+    w: Math.abs(endX - startX),
+    h: Math.abs(endY - startY)
+  };
 });
 
-canvas.addEventListener("mouseleave", () => {
-  dragging = false;
-});
+document.getElementById("ocrBtn").onclick = async () => {
+  if (!imgLoaded) return alert("画像を選択してください");
 
-function getCropImage() {
-  const x = Math.min(startX, endX);
-  const y = Math.min(startY, endY);
-  const w = Math.abs(endX - startX);
-  const h = Math.abs(endY - startY);
+  let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
 
-  if (w < 5 || h < 5) return canvas.toDataURL("image/png");
-
-  const tmp = document.createElement("canvas");
-  tmp.width = w;
-  tmp.height = h;
-  tmp.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
-  return tmp.toDataURL("image/png");
-}
-
-document.getElementById("ocrBtn").addEventListener("click", async () => {
-  if (!imgLoaded) {
-    alert("画像を選択してください");
-    return;
+  if (selection && selection.w > 5 && selection.h > 5) {
+    sx = selection.x / scale;
+    sy = selection.y / scale;
+    sw = selection.w / scale;
+    sh = selection.h / scale;
   }
-  result.value = "処理中...";
-  const dataUrl = getCropImage();
-  const base64 = dataUrl.split(",")[1];
 
-  const res = await fetch("https://ocr-proxy-773716506088.asia-northeast1.run.app/ocr", {
+  const off = document.createElement("canvas");
+  off.width = sw;
+  off.height = sh;
+  off.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  const base64 = off.toDataURL("image/png").split(",")[1];
+
+  const res = await fetch("YOUR_CLOUD_RUN_URL/ocr", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ image: base64 })
   });
 
-  const json = await res.json();
-  result.value = json.text || "";
-});
+  const data = await res.json();
+  result.value = data.text || "";
+};
 </script>
 </body>
 </html>
