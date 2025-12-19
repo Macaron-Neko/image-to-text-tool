@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>画像→文字抽出ツール（体験版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
 body {
   font-family: system-ui, sans-serif;
@@ -32,6 +33,10 @@ button {
   padding: 10px 20px;
   margin-top: 10px;
 }
+.buttons {
+  display: flex;
+  gap: 10px;
+}
 </style>
 </head>
 
@@ -40,19 +45,25 @@ button {
 
 <div class="box">
   <input type="file" id="fileInput" accept="image/*"><br><br>
+
   <canvas id="canvas"></canvas>
 
   <p>
     ・ドラッグなし → 全体OCR<br>
-    ・ドラッグあり → 選択範囲OCR
+    ・ドラッグあり → 選択範囲OCR<br>
+    ・右クリック / ダブルタップ → 赤枠消去
   </p>
 
-  <button id="ocrBtn">文字を抽出する</button>
+  <div class="buttons">
+    <button id="ocrBtn">文字を抽出する</button>
+    <button id="resetBtn">リセット</button>
+  </div>
+
   <textarea id="result" placeholder="ここに抽出結果が表示されます"></textarea>
 </div>
 
 <script>
-/* ★★★ 自分の Cloud Run URL に変更 ★★★ */
+/* ★ Cloud Run URL ★ */
 const OCR_ENDPOINT = "https://ocr-proxy-773716506088.asia-northeast1.run.app/ocr";
 
 const canvas = document.getElementById("canvas");
@@ -71,7 +82,19 @@ let startX, startY, endX, endY;
 let dragging = false;
 let selection = null;
 
-/* 画像読み込み */
+/* ===== 共通描画 ===== */
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!imgLoaded) return;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  if (selection) {
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+  }
+}
+
+/* ===== 画像読み込み ===== */
 input.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -86,25 +109,23 @@ input.addEventListener("change", e => {
       );
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       imgLoaded = true;
       selection = null;
+      redraw();
     };
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
 });
 
-/* 座標取得（PC＋スマホ共通） */
+/* ===== 座標取得 ===== */
 function getPos(e) {
   const r = canvas.getBoundingClientRect();
   const p = e.touches ? e.touches[0] : e;
-  return {
-    x: p.clientX - r.left,
-    y: p.clientY - r.top
-  };
+  return { x: p.clientX - r.left, y: p.clientY - r.top };
 }
 
+/* ===== ドラッグ処理 ===== */
 function startDrag(e) {
   if (!imgLoaded) return;
   e.preventDefault();
@@ -121,8 +142,7 @@ function moveDrag(e) {
   endX = p.x;
   endY = p.y;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  redraw();
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
   ctx.strokeRect(startX, startY, endX - startX, endY - startY);
@@ -139,7 +159,30 @@ function endDrag(e) {
     w: Math.abs(endX - startX),
     h: Math.abs(endY - startY)
   };
+  redraw();
 }
+
+/* ===== 赤枠消去 ===== */
+function clearSelection() {
+  selection = null;
+  redraw();
+}
+
+/* PC右クリック */
+canvas.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  clearSelection();
+});
+
+/* スマホダブルタップ */
+let lastTap = 0;
+canvas.addEventListener("touchend", e => {
+  const now = Date.now();
+  if (now - lastTap < 300) {
+    clearSelection();
+  }
+  lastTap = now;
+});
 
 /* イベント登録 */
 canvas.addEventListener("mousedown", startDrag);
@@ -148,9 +191,9 @@ canvas.addEventListener("mouseup", endDrag);
 
 canvas.addEventListener("touchstart", startDrag, { passive:false });
 canvas.addEventListener("touchmove", moveDrag, { passive:false });
-canvas.addEventListener("touchend", endDrag);
+canvas.addEventListener("touchend", endDrag, { passive:false });
 
-/* OCR実行 */
+/* ===== OCR ===== */
 document.getElementById("ocrBtn").onclick = async () => {
   if (!imgLoaded) return alert("画像を選択してください");
 
@@ -180,6 +223,16 @@ document.getElementById("ocrBtn").onclick = async () => {
 
   const data = await res.json();
   result.value = data.text || "";
+};
+
+/* ===== リセット ===== */
+document.getElementById("resetBtn").onclick = () => {
+  imgLoaded = false;
+  img.src = "";
+  canvas.width = canvas.height = 0;
+  selection = null;
+  result.value = "";
+  input.value = "";
 };
 </script>
 </body>
