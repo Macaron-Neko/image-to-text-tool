@@ -1,1 +1,1 @@
-# image-to-text-tool
+# 画像から文字抽出ツール
