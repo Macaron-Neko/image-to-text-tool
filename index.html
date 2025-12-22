@@ -21,13 +21,22 @@ h2 {
   background: #fff;
   padding: 20px;
   border-radius: 10px;
+
+  /* ★ズレ対策：canvasをCSSで縮小しない代わりに、はみ出したら横スクロール */
+  overflow-x: auto;
 }
 canvas {
   border: 1px solid #ccc;
   cursor: crosshair;
-  max-width: 100%;
+
+  /* ★ズレ原因：これがあると表示だけ縮んで座標がズレるので削除 */
+  /* max-width: 100%; */
+
   touch-action: none;
   display: none;            /* ⑤ 最初は表示しない */
+
+  /* ついでに：余計な隙間を減らす（任意だけど安全） */
+  vertical-align: top;
 }
 textarea {
   width: 100%;
@@ -115,6 +124,7 @@ input.addEventListener("change", e => {
       );
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
+
       canvas.style.display = "block";   /* ⑤ 読み込み後に表示 */
       imgLoaded = true;
       selection = null;
